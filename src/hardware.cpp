@@ -50,6 +50,7 @@ SPISettings oledSettings(10000000, MSBFIRST, SPI_MODE0);
 void MicroOLED::spiSetup()
 {
 	// Initialize the pins:
+	pinMode(dcPin, OUTPUT);
 	pinMode(MOSI, OUTPUT);	// MOSI is an OUTPUT
 	pinMode(SCK, OUTPUT);	// SCK is an OUTPUT
 	pinMode(csPin, OUTPUT);	// CS is an OUTPUT
@@ -59,20 +60,49 @@ void MicroOLED::spiSetup()
 	pinMode(10, OUTPUT); // Required for setting into Master mode
 #endif
 	SPI.begin();
+	#ifdef SPI_HAS_TRANSACTION
+		SPI.beginTransaction(oledSettings);
+    #else
+		SPI.setClockDivider(2);
+	#endif
 }
 
-/** \brief Transfer a byte over SPI
+/** \brief Transfer a uint8_t over SPI
 
-	Use the SPI library to transfer a byte. Only used for data OUTPUT.
+	Use the SPI library to transfer a uint8_t. Only used for data OUTPUT.
 	This function does not toggle the CS pin. Do that before and after!
 **/
-void MicroOLED::spiTransfer(byte data)
+void MicroOLED::spiTransfer(uint8_t data, uint8_t dc)
 {
-	SPI.beginTransaction(oledSettings);
+	//digitalWrite(csPin, HIGH);
+	digitalWrite(dcPin, dc);
 	digitalWrite(csPin, LOW);
+	//SPI.beginTransaction(oledSettings);
 	SPI.transfer(data);	
+	//SPI.endTransaction();
 	digitalWrite(csPin, HIGH);
-	SPI.endTransaction();
+}
+
+void MicroOLED::spiBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len)
+{
+	//digitalWrite(csPin, HIGH);
+	digitalWrite(dcPin, HIGH);	// DC HIGH for data
+	digitalWrite(csPin, LOW);
+	//SPI.beginTransaction(oledSettings);
+	for (uint16_t i = startIdx; i < startIdx+len; ++i) { SPI.transfer(data[i]);}
+	//SPI.endTransaction();
+	digitalWrite(csPin, HIGH);
+}
+
+void MicroOLED::spiBlockTransfer(uint8_t data, uint16_t len)
+{
+	//digitalWrite(csPin, HIGH);
+	digitalWrite(dcPin, HIGH);	// DC HIGH for data
+	digitalWrite(csPin, LOW);
+	//SPI.beginTransaction(oledSettings);
+	for (uint16_t i = 0; i < len; ++i) { SPI.transfer(data);}
+	//SPI.endTransaction();
+	digitalWrite(csPin, HIGH);
 }
 
 /** \brief Initialize the I2C Interface
@@ -86,20 +116,39 @@ void MicroOLED::i2cSetup()
 	Wire.begin();
 }
 
-/** \brief  Write a byte over I2C
+/** \brief  Write a uint8_t over I2C
 
-	Write a byte to I2C device _address_. The DC byte determines whether
+	Write a uint8_t to I2C device _address_. The DC uint8_t determines whether
 	the data being sent is a command or display data. Use either I2C_COMMAND
-	or I2C_DATA in that parameter. The data byte can be any 8-bit value.
+	or I2C_DATA in that parameter. The data uint8_t can be any 8-bit value.
 **/
-void MicroOLED::i2cWrite(byte address, byte dc, byte data)
+void MicroOLED::i2cTransfer(uint8_t data, uint8_t control)
 {
-	Wire.beginTransmission(address);
-	Wire.write(dc); // If data dc = 0, if command dc = 0x40
+	Wire.beginTransmission(i2c_address);
+	Wire.write(control); // If data dc = 0, if command dc = 0x40
 	Wire.write(data);
 	Wire.endTransmission();
 }
-
+void MicroOLED::i2cBlockTransfer(uint8_t data, uint16_t len)
+{
+	Wire.beginTransmission(i2c_address);
+	Wire.write(I2C_DATA);
+	for (uint16_t i=0; i<len; ++i)
+	{
+		Wire.write(data);
+	}
+	Wire.endTransmission();
+}
+void MicroOLED::i2cBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len)
+{
+	Wire.beginTransmission(i2c_address);
+	Wire.write(I2C_DATA);
+	for (uint16_t i=startIdx; i<startIdx+len; ++i)
+	{
+		Wire.write(data[i]);
+	}
+	Wire.endTransmission();
+}
 /** \brief Set up Parallel Interface
 
 	This function initializes all of the pins used in the
@@ -108,29 +157,30 @@ void MicroOLED::i2cWrite(byte address, byte dc, byte data)
 void MicroOLED::parallelSetup()
 {
 	// Initialize WR, RD, CS and data pins as outputs.
+	pinMode(dcPin, OUTPUT);
 	pinMode(wrPin, OUTPUT);
-	digitalWrite(wrPin, HIGH);
 	pinMode(rdPin, OUTPUT);
-	digitalWrite(rdPin, HIGH);
 	pinMode(csPin, OUTPUT);
+	digitalWrite(dcPin, HIGH); // either HIGH or LOW
+	digitalWrite(wrPin, HIGH);
+	digitalWrite(rdPin, HIGH);
 	digitalWrite(csPin, HIGH);
-	for (int i=0; i<8; i++)
+	for (uint16_t i=0; i<8; i++)
+	{
 		pinMode(dPins[i], OUTPUT);
+	}
 }
 
-/** \brief Write a byte over the parallel interface
+/** \brief Write a uint8_t over the parallel interface
 
 	This function will both set the DC pin, depending on whether a data or
-	command byte is being sent, and it will toggle the WR, RD and data pins
-	to send a byte.
+	command uint8_t is being sent, and it will toggle the WR, RD and data pins
+	to send a uint8_t.
 **/
-void MicroOLED::parallelWrite(byte data, byte dc)
+void MicroOLED::parallelTransfer(uint8_t data, uint8_t dc)
 {
 	// Initial state: cs high, wr high, rd high
-	//digitalWrite(csPin, HIGH);
-	//digitalWrite(wrPin, HIGH);
-	//digitalWrite(rdPin, HIGH);
-	
+
 	// chip select high->low
 	digitalWrite(csPin, LOW);
 	
@@ -141,7 +191,7 @@ void MicroOLED::parallelWrite(byte data, byte dc)
 	digitalWrite(wrPin, LOW);
 	
 	// set data pins
-	for (int i=0; i<8; i++)
+	for (uint16_t i=0; i<8; i++)
 	{
 		if (data & (1<<i))
 			digitalWrite(dPins[i], HIGH);
@@ -156,3 +206,18 @@ void MicroOLED::parallelWrite(byte data, byte dc)
 	digitalWrite(csPin, HIGH);
 }
 
+void MicroOLED::parallelBlockTransfer(uint8_t data, uint16_t len)
+{
+	for (uint16_t i=0; i<len; i++)
+	{
+		parallelTransfer(data, HIGH); // data = HIGH
+	}
+}
+
+void MicroOLED::parallelBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len)
+{
+	for (uint16_t i=0; i<len; i++)
+	{
+		parallelTransfer(data[i], HIGH); // data = HIGH
+	}
+}

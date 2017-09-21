@@ -49,8 +49,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define swap(a, b) { uint8_t t = a; a = b; b = t; }
 
-#define I2C_ADDRESS_SA0_0 0b0111100
-#define I2C_ADDRESS_SA0_1 0b0111101
+#define I2C_ADDRESS_SA0_0 0b0111100 // 0x3C
+#define I2C_ADDRESS_SA0_1 0b0111101 // 0x3D
 #define I2C_COMMAND 0x00
 #define I2C_DATA 0x40
 
@@ -59,6 +59,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define LCDWIDTH			64
 #define LCDHEIGHT			48
+#define DISPLAY_BUFFER_SIZE (LCDHEIGHT*LCDWIDTH/8) // 384 - Default Value
+
 #define FONTHEADERSIZE		6
 
 #define NORM				0
@@ -66,10 +68,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define PAGE				0
 #define ALL					1
-
-#define WIDGETSTYLE0			0
-#define WIDGETSTYLE1			1
-#define WIDGETSTYLE2			2
 
 #define SETCONTRAST 		0x81
 #define DISPLAYALLONRESUME 	0xA4
@@ -87,13 +85,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SETLOWCOLUMN 		0x00
 #define SETHIGHCOLUMN 		0x10
 #define SETSTARTLINE 		0x40
-#define MEMORYMODE 			0x20
 #define COMSCANINC 			0xC0
 #define COMSCANDEC 			0xC8
 #define SEGREMAP 			0xA0
 #define CHARGEPUMP 			0x8D
 #define EXTERNALVCC 		0x01
 #define SWITCHCAPVCC 		0x02
+
+#define MEMORYMODE 			0x20
+#define COLUMNADDR   		0x21
+#define PAGEADDR   			0x22
 
 // Scroll
 #define ACTIVATESCROLL 					0x2F
@@ -135,24 +136,25 @@ typedef enum COMM_MODE{
 class MicroOLED : public Print{
 public:
 	// Constructor(s)
-	MicroOLED(uint8_t rst, uint8_t dc, uint8_t cs);
-	MicroOLED(uint8_t rst, uint8_t dc);
+	MicroOLED(uint8_t rst = -1, uint8_t dc = 0); // I2C
+	MicroOLED(uint8_t rst, uint8_t dc, uint8_t cs); // SPI
 	MicroOLED(uint8_t rst, uint8_t dc, uint8_t cs, uint8_t wr, uint8_t rd, 
 			  uint8_t d0, uint8_t d1, uint8_t d2, uint8_t d3, 
-			  uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7);
-	
+			  uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7); // Parallel
+	~MicroOLED() { free(screenmemory); }
 	void begin(void);
 	virtual size_t write(uint8_t);
 
 	// RAW LCD functions
 	void command(uint8_t c);
 	void data(uint8_t c);
+	void dataBlock(uint8_t c, uint16_t len);
+	void dataBlock(uint8_t * c, uint16_t startIdx, uint16_t len);
 	void setColumnAddress(uint8_t add);
 	void setPageAddress(uint8_t add);
 	
 	// LCD Draw functions
-	void clear(uint8_t mode);
-	void clear(uint8_t mode, uint8_t c);
+	void clear(uint8_t mode, uint8_t c = 0);
 	void invert(boolean inv);
 	void contrast(uint8_t contrast);
 	void display(void);
@@ -176,6 +178,7 @@ public:
 	void drawChar(uint8_t x, uint8_t y, uint8_t c);
 	void drawChar(uint8_t x, uint8_t y, uint8_t c, uint8_t color, uint8_t mode);
 	void drawBitmap(uint8_t * bitArray);
+	void drawBitmap(const uint8_t bitArray[]);
 	uint8_t getLCDWidth(void);
 	uint8_t getLCDHeight(void);
 	void setColor(uint8_t color);
@@ -200,13 +203,24 @@ public:
 	void flipVertical(boolean flip);
 	void flipHorizontal(boolean flip);
 	
+	void setScreenSize(uint8_t lcdWidth, uint8_t lcdHeight);
+
+	void displayOff();
+	void displayOn();
+
+	void sleep();
+	void wake();
 private:
-	uint8_t csPin, dcPin, rstPin;
+	uint8_t * screenmemory = NULL;
+	uint8_t _lcdHeight, _lcdWidth;
+	uint16_t _displayBufferSize;
+	uint8_t csPin, dcPin;
+	int16_t rstPin;
 	uint8_t wrPin, rdPin, dPins[8];
 	volatile uint8_t *wrport, *wrreg, *rdport, *rdreg;
 	uint8_t wrpinmask, rdpinmask;
 	micro_oled_mode interface;
-	byte i2c_address;
+	uint8_t i2c_address;
 	volatile uint8_t *ssport, *dcport, *ssreg, *dcreg;	// use volatile because these are fixed location port address
 	uint8_t mosipinmask, sckpinmask, sspinmask, dcpinmask;
 	uint8_t foreColor,drawMode,fontWidth, fontHeight, fontType, fontStartChar, fontTotalChar, cursorX, cursorY;
@@ -214,11 +228,18 @@ private:
 	static const unsigned char *fontsPointer[];
 	
 	// Communication
-	void spiTransfer(byte data);
+	void spiTransfer(uint8_t data, uint8_t dc);
+	void spiBlockTransfer(uint8_t data, uint16_t len);
+	void spiBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len);
 	void spiSetup();
 	void i2cSetup();
-	void i2cWrite(byte address, byte control, byte data);
+	void i2cTransfer(uint8_t data, uint8_t control);
+	void i2cBlockTransfer(uint8_t data, uint16_t len);
+	void i2cBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len);
 	void parallelSetup();
-	void parallelWrite(byte data, byte dc);
+	void parallelTransfer(uint8_t data, uint8_t dc);
+	void parallelBlockTransfer(uint8_t data, uint16_t len);
+	void parallelBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len);
 };
+
 #endif
