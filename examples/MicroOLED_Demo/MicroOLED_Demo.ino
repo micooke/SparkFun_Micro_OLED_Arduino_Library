@@ -19,6 +19,7 @@
  ******************************************************************************/
 #include <Wire.h>  // Include Wire if you're using I2C
 #include <SPI.h>  // Include SPI if you're using SPI
+// Note: Uncomment //#define INCLUDE_LARGE_FONTS in SFE_MicroOLED.cpp to access large fonts
 #include <SFE_MicroOLED.h>  // Include the SFE_MicroOLED library
 
 //////////////////////////
@@ -260,7 +261,7 @@ void textExamples()
     oled.display();
     delay(100);
   }
-  
+#if (TOTALFONTS == 5)
   // Demonstrate font 3. 12x48. Stopwatch demo.
   oled.setFontType(3);  // Use the biggest font
   int ms = 0;
@@ -298,6 +299,7 @@ void textExamples()
   oled.setCursor(0, 0);
   oled.print("ED");
   oled.display();
+#endif
   delay(1000);
 }
 

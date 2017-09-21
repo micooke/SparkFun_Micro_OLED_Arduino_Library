@@ -24,21 +24,23 @@
 //////////////////////////
 // MicroOLED Definition //
 //////////////////////////
-#define PIN_RESET 9  // Connect RST to pin 9 (SPI & I2C)
-#define PIN_DC    8  // Connect DC to pin 8 (SPI only)
-#define PIN_CS    10 // Connect CS to pin 10 (SPI only)
+#define PIN_RESET 30 // Connect RST to pin 30 (SPI & I2C)
+#define PIN_DC     0 // Connect DC to pin 0 (SPI only)
+#define PIN_CS    29 // Connect CS to pin 29 (SPI only)
 #define DC_JUMPER 0  // DC jumper setting(I2C only)
 
 //////////////////////////////////
 // MicroOLED Object Declaration //
 //////////////////////////////////
-MicroOLED oled(PIN_RESET, PIN_DC, PIN_CS);  // SPI Example
+
+//MicroOLED oled(PIN_RESET, PIN_DC, PIN_CS);  // SPI Example
 //MicroOLED oled(PIN_RESET, DC_JUMPER);  // I2C Example
+MicroOLED oled; // I2C Example (No RST pin, i2c address  = 0x3C)
 
 // Use these variables to set the initial time
-int hours = 11;
-int minutes = 50;
-int seconds = 30;
+int hours = (__TIME__[0] -'0') *10 +( __TIME__[1] -'0');
+int minutes = (__TIME__[3] -'0') *10 +( __TIME__[4] -'0');
+int seconds = (__TIME__[7] -'0') *10 +( __TIME__[7] -'0');
 
 // How fast do you want the clock to spin? Set this to 1 for fun.
 // Set this to 1000 to get _about_ 1 second timing.
@@ -80,7 +82,7 @@ void initClockVariables()
 
 void setup()
 {
-  oled.setScreenSize(64,32); // Default values
+  oled.setScreenSize(128, 64);
   MIDDLE_X = oled.getLCDWidth() / 2;
   MIDDLE_Y = oled.getLCDHeight() / 2;
   oled.begin();     // Initialize the OLED
