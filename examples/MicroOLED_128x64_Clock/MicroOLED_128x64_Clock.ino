@@ -17,8 +17,7 @@
  * 
  * Distributed as-is; no warranty is given.
  ***************************************************************/
-#include <Wire.h>  // Include Wire if you're using I2C
-#include <SPI.h>  // Include SPI if you're using SPI
+//#define SFE_MicroOLED_SoftwareI2C
 #include <SFE_MicroOLED.h>  // Include the SFE_MicroOLED library
 
 //////////////////////////
@@ -35,7 +34,11 @@
 
 //MicroOLED oled(PIN_RESET, PIN_DC, PIN_CS);  // SPI Example
 //MicroOLED oled(PIN_RESET, DC_JUMPER);  // I2C Example
+#ifdef SFE_MicroOLED_SoftwareI2C
+MicroOLED oled(7,8); // SoftwareI2C Example - sda,scl = 7,8
+#else
 MicroOLED oled; // I2C Example (No RST pin, i2c address  = 0x3C)
+#endif
 
 // Use these variables to set the initial time
 int hours = (__TIME__[0] -'0') *10 +( __TIME__[1] -'0');
@@ -82,6 +85,10 @@ void initClockVariables()
 
 void setup()
 {
+  Serial.begin(9600);
+  Serial.println(__FILE__);
+  Serial.println(__TIME__);
+
   oled.setScreenSize(128, 64);
   MIDDLE_X = oled.getLCDWidth() / 2;
   MIDDLE_Y = oled.getLCDHeight() / 2;
@@ -100,7 +107,6 @@ void setup()
 
 void loop()
 {
-  
   // Check if we need to update seconds, minutes, hours:
   if (lastDraw + CLOCK_SPEED < millis())
   {
@@ -113,6 +119,8 @@ void loop()
     drawFace();  // Draw the face to the buffer
     drawArms(hours, minutes, seconds);  // Draw arms to the buffer
     oled.display(); // Draw the memory buffer
+
+    Serial.print(".");
   }
 }
 

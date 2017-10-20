@@ -11,6 +11,12 @@ Emil Varughese @ Edwin Robotics Pvt. Ltd.
 July 27, 2015
 https://github.com/emil01/SparkFun_Micro_OLED_Arduino_Library/
 
+Modified by:
+Mark Cooke
+Sep 18, 2017
+* Added SoftwareI2C option, modified for large and small OLED screens
+https://github.com/micooke/sparkfun_OLED
+
 This file defines the hardware interface(s) for the Micro OLED Breakout. Those
 interfaces include SPI, I2C and a parallel bus.
 
@@ -34,14 +40,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ******************************************************************************/
 
-#include "SFE_MicroOLED.h"
-#include <SPI.h>
-#include <Wire.h>
-
 #define I2C_FREQ 400000L	// I2C Frequency is 400kHz (fast as possible)
 
 // Configure SPI settings - Max clk frequency for display is 10MHz
 SPISettings oledSettings(10000000, MSBFIRST, SPI_MODE0);
+
+void delay_100us() {uint32_t timer_t = micros(); while(micros() - timer_t < 100) { yield(); } }
 
 /** \brief Set Up SPI Interface
 
@@ -105,6 +109,29 @@ void MicroOLED::spiBlockTransfer(uint8_t data, uint16_t len)
 	digitalWrite(csPin, HIGH);
 }
 
+void MicroOLED::i2cScan()
+{
+	for(uint8_t address=1; address<128; ++address)
+	{
+	  SFE_MicroOLED_Wire.beginTransmission(address);
+	  SFE_MicroOLED_Wire.write((uint8_t)0); // register 0
+	  SFE_MicroOLED_Wire.endTransmission();
+	  uint8_t device_found = (SFE_MicroOLED_Wire.requestFrom(address, 1) == 1); // read 1 byte of data
+	  SFE_MicroOLED_Wire.endTransmission();
+
+	  if(device_found)
+	  {
+	      if ((address == I2C_ADDRESS_SA0_0) || (address == I2C_ADDRESS_SA0_1))
+	      {
+	      	_i2c_address = address;
+	      	return;
+	      }
+	  }
+	}
+	
+	// this should not be needed, but the address defaults to 0x3C if it wasnt found in the scan
+	_i2c_address = I2C_ADDRESS_SA0_0; 
+}
 /** \brief Initialize the I2C Interface
 
 	This function initializes the I2C peripheral. It also sets up the
@@ -113,7 +140,7 @@ void MicroOLED::spiBlockTransfer(uint8_t data, uint16_t len)
 void MicroOLED::i2cSetup()
 {
 	// Initialize Wire library (I2C)
-	Wire.begin();
+	SFE_MicroOLED_Wire.begin();
 }
 
 /** \brief  Write a uint8_t over I2C
@@ -124,30 +151,36 @@ void MicroOLED::i2cSetup()
 **/
 void MicroOLED::i2cTransfer(uint8_t data, uint8_t control)
 {
-	Wire.beginTransmission(i2c_address);
-	Wire.write(control); // If data dc = 0, if command dc = 0x40
-	Wire.write(data);
-	Wire.endTransmission();
+	SFE_MicroOLED_Wire.beginTransmission(_i2c_address);
+	SFE_MicroOLED_Wire.write(control); // If data dc = 0, if command dc = 0x40
+	delay_100us();
+	SFE_MicroOLED_Wire.write(data);
+	delay_100us();
+	SFE_MicroOLED_Wire.endTransmission();
 }
 void MicroOLED::i2cBlockTransfer(uint8_t data, uint16_t len)
 {
-	Wire.beginTransmission(i2c_address);
-	Wire.write(I2C_DATA);
+	SFE_MicroOLED_Wire.beginTransmission(_i2c_address);
+	SFE_MicroOLED_Wire.write(I2C_DATA);
+	delay_100us();
 	for (uint16_t i=0; i<len; ++i)
 	{
-		Wire.write(data);
+		SFE_MicroOLED_Wire.write(data);
+		delay_100us();
 	}
-	Wire.endTransmission();
+	SFE_MicroOLED_Wire.endTransmission();
 }
 void MicroOLED::i2cBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len)
 {
-	Wire.beginTransmission(i2c_address);
-	Wire.write(I2C_DATA);
+	SFE_MicroOLED_Wire.beginTransmission(_i2c_address);
+	SFE_MicroOLED_Wire.write(I2C_DATA);
+	delay_100us();
 	for (uint16_t i=startIdx; i<startIdx+len; ++i)
 	{
-		Wire.write(data[i]);
+		SFE_MicroOLED_Wire.write(data[i]);
+		delay_100us();
 	}
-	Wire.endTransmission();
+	SFE_MicroOLED_Wire.endTransmission();
 }
 /** \brief Set up Parallel Interface
 
