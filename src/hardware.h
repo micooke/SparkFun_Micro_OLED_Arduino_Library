@@ -40,7 +40,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ******************************************************************************/
 
-#define I2C_FREQ 400000L	// I2C Frequency is 400kHz (fast as possible)
+//#define I2C_FREQ 400000L	// I2C Frequency is 400kHz (fast as possible)
 
 // Configure SPI settings - Max clk frequency for display is 10MHz
 SPISettings oledSettings(10000000, MSBFIRST, SPI_MODE0);
@@ -60,9 +60,6 @@ void MicroOLED::spiSetup()
 	pinMode(csPin, OUTPUT);	// CS is an OUTPUT
 	digitalWrite(csPin, HIGH);	// Start CS High
 	
-#if defined(__AVR__)
-	pinMode(10, OUTPUT); // Required for setting into Master mode
-#endif
 	SPI.begin();
 	#ifdef SPI_HAS_TRANSACTION
 		SPI.beginTransaction(oledSettings);

@@ -216,7 +216,7 @@ public:
 	void setPageAddress(uint8_t add);
 	
 	// LCD Draw functions
-	void clear(uint8_t mode, uint8_t c = 0);
+	void clear(uint8_t mode = SFEOLED_ALL, uint8_t c = 0);
 	void invert(boolean inv);
 	void contrast(uint8_t contrast);
 	void display(void);

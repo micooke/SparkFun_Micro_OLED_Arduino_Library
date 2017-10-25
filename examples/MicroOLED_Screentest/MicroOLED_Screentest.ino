@@ -46,6 +46,8 @@ void setup()
   oled.rect(0, 0, OLED_WIDTH, OLED_HEIGHT);
   
   oled.display();
+
+  tButton = millis();
 }
 
 void loop()
