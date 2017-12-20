@@ -56,6 +56,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <SPI.h>
 #include <Wire.h>
 
+#ifndef WIRE_INTERFACES_COUNT
+#define WIRE_INTERFACES_COUNT 1  // WIRE_INTERFACES_COUNT doesnt appear to be defined in AVR boards
+#endif
+
 #if (WIRE_INTERFACES_COUNT == 0) & !(defined(SFE_MicroOLED_SoftwareI2C))
 #define SFE_MicroOLED_SoftwareI2C
 #endif
@@ -70,16 +74,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define _BV(x) (1 << x)
 #endif
 
+//#define DEBUG_SFE_MicroOLED
+#ifdef DEBUG_SFE_MicroOLED
+#define DebugPrintln(...) Serial.println(__VA_ARGS__)
+#else
+#define DebugPrintln(...)
+#endif
+
 // The 31x48 font is handy, but uses a big chunk of flash memory - about 7k.
 // If you want to use font 4 in your sketch, uncomment out the line below:
 //#define INCLUDE_LARGE_FONTS
 
 // This fixed ugly GCC warning "only initialized variables can be placed into program memory area"
+/*
 #if defined(__AVR__)
 #undef PROGMEM
 #define PROGMEM __attribute__((section(".progmem.data")))
 #endif
-
+*/
 // Add header of the fonts here.  Remove as many as possible to conserve FLASH memory.
 #include "util/7segment.h"
 #include "util/font5x7.h"
@@ -159,7 +171,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //#define SFEOLED_SWITCHCAPVCC 0x02
 
 #define SFEOLED_MEMORYMODE 0x20
-enum MemoryMode {horizontal = 0, vertical, page};
 
 #define SFEOLED_COLUMNADDR 0x21
 #define SFEOLED_PAGEADDR 0x22
@@ -173,63 +184,51 @@ enum MemoryMode {horizontal = 0, vertical, page};
 //#define SFEOLED_VERTICALRIGHTHORIZONTALSCROLL 0x29
 //#define SFEOLED_VERTICALLEFTHORIZONTALSCROLL 0x2A
 
-/*
-typedef enum CMD {
-   CMD_CLEAR,         // 0
-   CMD_INVERT,        // 1
-   CMD_CONTRAST,      // 2
-   CMD_DISPLAY,       // 3
-   CMD_SETCURSOR,     // 4
-   CMD_PIXEL,         // 5
-   CMD_LINE,          // 6
-   CMD_LINEH,         // 7
-   CMD_LINEV,         // 8
-   CMD_RECT,          // 9
-   CMD_RECTFILL,      // 10
-   CMD_CIRCLE,        // 11
-   CMD_CIRCLEFILL,    // 12
-   CMD_DRAWCHAR,      // 13
-   CMD_DRAWBITMAP,    // 14
-   CMD_GETLCDWIDTH,   // 15
-   CMD_GETLCDHEIGHT,  // 16
-   CMD_SETCOLOR,      // 17
-   CMD_SETDRAWMODE    // 18
-} commCommand_t;
-*/
 typedef enum COMM_MODE { COMM_MODE_SPI, COMM_MODE_I2C, COMM_MODE_PARALLEL } micro_oled_mode;
+
+enum DISPLAY_IC
+{
+   SSD1306 = 0,
+   SH1107
+};
+enum DISPLAY_VPP
+{
+   External = 1,
+   Internal
+};
 
 class MicroOLED : public Print
 {
   public:
 // Constructor(s)
 #ifdef SFE_MicroOLED_SoftwareI2C
-   MicroOLED(uint8_t pinSda = 7, uint8_t pinScl = 8);	// SoftwareI2C
+   MicroOLED(uint8_t pinSda = 7, uint8_t pinScl = 8);  // SoftwareI2C
 #else
-   MicroOLED(int16_t rst = -1, uint8_t dc = 0);	// I2C
+   MicroOLED(int16_t rst = -1, uint8_t dc = 0);  // I2C
 #endif
-   MicroOLED(int16_t rst, uint8_t dc, uint8_t cs);	// SPI
+   MicroOLED(int16_t rst, uint8_t dc, uint8_t cs);  // SPI
    MicroOLED(int16_t rst, uint8_t dc, uint8_t cs, uint8_t wr, uint8_t rd, uint8_t d0, uint8_t d1,
-             uint8_t d2, uint8_t d3, uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7);	// Parallel
-   ~MicroOLED() { free(screenmemory); }
+             uint8_t d2, uint8_t d3, uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7);  // Parallel
+   ~MicroOLED() { if(_initialised) {free(screenmemory);} }
 
    void changeSPIpins(int16_t rst, uint8_t dc, uint8_t cs)
    {
       rstPin    = rst;
       dcPin     = dc;
       csPin     = cs;
-      interface = COMM_MODE_SPI;	// Set interface mode to SPI
+      interface = COMM_MODE_SPI;  // Set interface mode to SPI
    }
 
-   void begin(void);
-   virtual size_t write(uint8_t);	// RAW LCD functions
+   void begin(uint8_t vppSource = DISPLAY_VPP::Internal, uint8_t displayIC = DISPLAY_IC::SSD1306);
+   virtual size_t write(uint8_t);  // RAW LCD functions
    void command(uint8_t c);
    void data(uint8_t c);
    void dataBlock(uint8_t c, uint16_t len);
    void dataBlock(uint8_t *c, uint16_t startIdx, uint16_t len);
    void setColumnAddress(uint8_t add);
-   void setPageAddress(uint8_t add);	// LCD Draw functions
+   void setPageAddress(uint8_t add);  // LCD Draw functions
    void clear(uint8_t mode = SFEOLED_ALL, uint8_t c = 0);
-   void invert(boolean inv);
+   void invert(bool inv);
    void contrast(uint8_t contrast);
    void display(void);
    void setCursor(uint8_t x, uint8_t y);
@@ -257,23 +256,25 @@ class MicroOLED : public Print
    uint8_t getLCDHeight(void);
    void setColor(uint8_t color);
    void setDrawMode(uint8_t mode);
-   uint8_t *getScreenBuffer(void);	// Font functions
+   uint8_t *getScreenBuffer(void);  // Font functions
    uint8_t getFontWidth(void);
    uint8_t getFontHeight(void);
    uint8_t getTotalFonts(void);
    uint8_t getFontType(void);
    uint8_t setFontType(uint8_t type);
    uint8_t getFontStartChar(void);
-   uint8_t getFontTotalChar(void);	// LCD Rotate Scroll functions
+   uint8_t getFontTotalChar(void);  // LCD Rotate Scroll functions
    void scrollRight(uint8_t start, uint8_t stop);
    void scrollLeft(uint8_t start, uint8_t stop);
    void scrollVertRight(uint8_t start, uint8_t stop);
    void scrollVertLeft(uint8_t start, uint8_t stop);
    void scrollStop(void);
-   void flipVertical(boolean flip);
-   void flipHorizontal(boolean flip);
+   void flipVertical(bool flip);
+   void flipHorizontal(bool flip);
 
    void setScreenSize(uint8_t lcdWidth, uint8_t lcdHeight);
+   void setupDisplay(uint8_t xOffset = 0x00, uint8_t yOffset = 0x00, uint8_t comPins = 0x12);
+
    void getI2CAddress();
 
    void displayOff();
@@ -288,9 +289,11 @@ class MicroOLED : public Print
 #ifdef SFE_MicroOLED_SoftwareI2C
    SoftwareI2C SFE_MicroOLED_Wire;
 #endif
-
-   uint8_t *screenmemory = NULL;
+   bool _initialised = false;
+   //uint8_t screenmemory[128*64/8];
+   uint8_t *screenmemory;
    uint8_t _lcdHeight, _lcdWidth;
+   uint8_t _xOffset, _yOffset, _comPins, _vppSource;
    uint16_t _displayBufferSize;
    uint8_t csPin, dcPin;
    int16_t rstPin;
@@ -300,11 +303,13 @@ class MicroOLED : public Print
    micro_oled_mode interface;
    uint8_t _i2c_address;
    volatile uint8_t *ssport, *dcport, *ssreg,
-       *dcreg;	// use volatile because these are fixed location port address
+       *dcreg;  // use volatile because these are fixed location port address
    uint8_t mosipinmask, sckpinmask, sspinmask, dcpinmask;
    uint8_t foreColor, drawMode, fontWidth, fontHeight, fontType, fontStartChar, fontTotalChar,
        cursorX, cursorY;
-   uint16_t fontMapWidth;	// Communication
+   uint16_t fontMapWidth;  
+   void initScreenMemory();
+   // Communication
    void spiTransfer(uint8_t data, uint8_t dc);
    void spiBlockTransfer(uint8_t data, uint16_t len);
    void spiBlockTransfer(uint8_t *data, uint16_t startIdx, uint16_t len);
@@ -318,7 +323,8 @@ class MicroOLED : public Print
    void parallelTransfer(uint8_t data, uint8_t dc);
    void parallelBlockTransfer(uint8_t data, uint16_t len);
    void parallelBlockTransfer(uint8_t *data, uint16_t startIdx, uint16_t len);
-};	// ----  SFE_MicroOLED.cpp  -----------------------------------------------------------
+};
+// ----  SFE_MicroOLED.cpp  -----------------------------------------------------------
 
 // Add the font name as declared in the header file.  Remove as many as possible to conserve FLASH
 // memory.
@@ -334,15 +340,28 @@ void MicroOLED::setScreenSize(uint8_t lcdWidth, uint8_t lcdHeight)
    _lcdHeight         = lcdHeight;
    _lcdWidth          = lcdWidth;
    _displayBufferSize = _lcdHeight * _lcdWidth / 8;
+}
 
+void MicroOLED::initScreenMemory()
+{
+   // calloc zero-initialises the memory
    screenmemory = (uint8_t *)calloc(_displayBufferSize, sizeof(uint8_t));
-#ifndef SFEOLED_NO_LOGO
+   _initialised = true;
+
    if (_displayBufferSize == 384)  // Initial size is 384
    {
       // I havent tried this so it probably wont work...
-      memcpy_P(screenmemory, sfe_logo, _displayBufferSize * sizeof(uint8_t));
+      #ifndef SFEOLED_NO_LOGO
+         memcpy_P(screenmemory, sfe_logo, _displayBufferSize * sizeof(uint8_t));
+      #endif
    }
-#endif
+}
+
+void MicroOLED::setupDisplay(uint8_t xOffset, uint8_t yOffset, uint8_t comPins)
+{
+   _xOffset = xOffset;
+   _yOffset = yOffset;
+   _comPins = comPins;
 }
 
 void MicroOLED::getI2CAddress()
@@ -360,7 +379,7 @@ void MicroOLED::getI2CAddress()
 
 void MicroOLED::displayOff()
 {
-   command(SFEOLED_DISPLAYOFF);	// 0xAE
+   command(SFEOLED_DISPLAYOFF);  // 0xAE
 }
 
 void MicroOLED::displayOn() { command(SFEOLED_DISPLAYON); }
@@ -368,24 +387,24 @@ void MicroOLED::displayOn() { command(SFEOLED_DISPLAYON); }
 void MicroOLED::sleep()
 {
    command(SFEOLED_DISPLAYOFF);
-   command(SFEOLED_CHARGEPUMP);	// turn off charge pump
-   command(0x10);	// delay(100);	// power stabilisation delay
+   command(SFEOLED_CHARGEPUMP);  // turn off charge pump
+   command(0x10);                // delay(100);	// power stabilisation delay
    // power down Vbat
    // delay(50);	// power down Vdd
 }
 
 void MicroOLED::wake()
 {
-   command(SFEOLED_CHARGEPUMP);	// 0x8D - enable charge pump
+   command(SFEOLED_CHARGEPUMP);  // 0x8D - enable charge pump
    command(0x14);
-   command(SFEOLED_DISPLAYON);	// delay(100);
+   command(SFEOLED_DISPLAYON);  // delay(100);
 
    display();
 }
 
 void MicroOLED::printf(const char *format, ...)
 {
-   static char buffer[128];	// assume max 128px wide screen
+   static char buffer[128];  // assume max 128px wide screen
 
    va_list args;
    va_start(args, format);
@@ -395,7 +414,7 @@ void MicroOLED::printf(const char *format, ...)
    char *c = (char *)&buffer;
    while (*c != 0)
    {
-      write(*c++);	// putc2(*c++);
+      write(*c++);  // putc2(*c++);
    }
 }
 
@@ -408,9 +427,10 @@ void MicroOLED::printf(const char *format, ...)
 MicroOLED::MicroOLED(uint8_t pinSda, uint8_t pinScl)  // SoftwareI2C
 {
    setScreenSize(SFEOLED_LCDWIDTH, SFEOLED_LCDHEIGHT);
+   setupDisplay();
 
    rstPin    = -1;
-   interface = COMM_MODE_I2C;	// Set interface to I2C
+   interface = COMM_MODE_I2C;  // Set interface to I2C
 
    SFE_MicroOLED_Wire.init(pinSda, pinScl);
 
@@ -426,9 +446,10 @@ MicroOLED::MicroOLED(uint8_t pinSda, uint8_t pinScl)  // SoftwareI2C
 MicroOLED::MicroOLED(int16_t rst, uint8_t dc)
 {
    setScreenSize(SFEOLED_LCDWIDTH, SFEOLED_LCDHEIGHT);
+   setupDisplay();
 
-   rstPin    = rst;	// Assign reset pin to private class variable
-   interface = COMM_MODE_I2C;	// Set interface to I2C
+   rstPin    = rst;            // Assign reset pin to private class variable
+   interface = COMM_MODE_I2C;  // Set interface to I2C
    // Set the I2C Address based on whether DC is high (1) or low (0).
    // The pin is pulled low by default, so if it's not explicitly set to
    // 1, just default to 0.
@@ -446,11 +467,14 @@ MicroOLED::MicroOLED(int16_t rst, uint8_t dc)
 */
 MicroOLED::MicroOLED(int16_t rst, uint8_t dc, uint8_t cs)
 {
-   setScreenSize(SFEOLED_LCDWIDTH, SFEOLED_LCDHEIGHT);	// Assign each of the parameters to a private class variable.
+   setScreenSize(SFEOLED_LCDWIDTH,
+                 SFEOLED_LCDHEIGHT);  // Assign each of the parameters to a private class variable.
+   setupDisplay();
+
    rstPin    = rst;
    dcPin     = dc;
    csPin     = cs;
-   interface = COMM_MODE_SPI;	// Set interface mode to SPI
+   interface = COMM_MODE_SPI;  // Set interface mode to SPI
 }
 
 /** \brief MicroOLED Constructor -- Parallel Mode
@@ -463,8 +487,9 @@ MicroOLED::MicroOLED(int16_t rst, uint8_t dc, uint8_t cs, uint8_t wr, uint8_t rd
                      uint8_t d7)
 {
    setScreenSize(SFEOLED_LCDWIDTH, SFEOLED_LCDHEIGHT);
+   setupDisplay();
 
-   interface = COMM_MODE_PARALLEL;	// Set to parallel mode
+   interface = COMM_MODE_PARALLEL;  // Set to parallel mode
    // Assign pin parameters to private class variables.
    rstPin   = rst;
    dcPin    = dc;
@@ -486,84 +511,168 @@ MicroOLED::MicroOLED(int16_t rst, uint8_t dc, uint8_t cs, uint8_t wr, uint8_t rd
     Setup IO pins for SPI port then send initialisation commands to the SSD1306 controller inside
    the OLED.
 */
-void MicroOLED::begin()
+void MicroOLED::begin(uint8_t vppSource, uint8_t displayIC)
 {
+   // malloc screenmemory
+   initScreenMemory();
+
+   // Set screen offsets
+   if (_lcdWidth <= 64)
+   {
+      if (_lcdHeight > 64)
+      {
+         setupDisplay(0x00, 0x60);
+      }
+      else
+      {
+         setupDisplay(0x02, 0x00);
+      }
+   }
+   else if (_lcdHeight < 64)
+   {
+      setupDisplay(0x02, 0x00, 0x02);
+   }
+   else
+   {
+      setupDisplay(0x00, 0x00);
+   }
+
+   Serial.print(F("(x,y,comPins,VPP,IC)="));
+   Serial.print(_xOffset, HEX);
+   Serial.print(F(","));
+   Serial.print(_yOffset, HEX);
+   Serial.print(F(","));
+   Serial.print(_comPins, HEX);
+   Serial.print(F(","));
+   Serial.print(vppSource == DISPLAY_VPP::Internal ? "Internal" : "External");
+   Serial.print(F(","));
+   Serial.print(displayIC == DISPLAY_IC::SSD1306 ? "SSD1306" : "SH1107");
+   Serial.println(F(""));
+
    // default 5x7 font
    setFontType(0);
    setColor(SFEOLED_WHITE);
    setDrawMode(SFEOLED_NORM);
-   setCursor(0, 0);	// Set up the selected interface:
+   setCursor(0, 0);  // Set up the selected interface:
    if (interface == COMM_MODE_SPI)
       spiSetup();
    else if (interface == COMM_MODE_I2C)
       i2cSetup();
    else if (interface == COMM_MODE_PARALLEL)
-      parallelSetup();	// Display reset routine
+      parallelSetup();  // Display reset routine
    if (rstPin >= 0)
    {
-      pinMode(rstPin, OUTPUT);	// Set RST pin as OUTPUT
-      digitalWrite(rstPin, HIGH);	// Initially set RST HIGH
-      delay(5);	// VDD (3.3V) goes high at start, lets just chill for 5 ms
-      digitalWrite(rstPin, LOW);	// Bring RST low, reset the display
-      delay(10);	// wait 10ms
-      digitalWrite(rstPin, HIGH);	// Set RST HIGH, bring out of reset
+      pinMode(rstPin, OUTPUT);     // Set RST pin as OUTPUT
+      digitalWrite(rstPin, HIGH);  // Initially set RST HIGH
+      delay(5);                    // VDD (3.3V) goes high at start, lets just chill for 5 ms
+      digitalWrite(rstPin, LOW);   // Bring RST low, reset the display
+      delay(10);                   // wait 10ms
+      digitalWrite(rstPin, HIGH);  // Set RST HIGH, bring out of reset
    }
 
    // Page numbers quoted from SH1107V2.1.pdf
-   command(0xAE);	// (p33) 11. display OFF 
+   command(0xAE);  // (p33) 11. display OFF
 
-   command(0x00);	// (p23) 1. set lower column address
-   command(0x10);	// (p23) 2. set higher column address
+   // set in display function
+   command(0x00);  // (p23) 1. set lower column address
+   command(0x10);  // (p23) 2. set higher column address
 
-   #ifdef SFEOLED_SH1107
-   // 0x20/0x21 = page, vertical
-   // Note : SSH1107 has no horizontal mode, and does not increment columns for vertical mode
-   command(0x20);	// (p24) 3. Set Memory addressing mode 
-   #else
-   
-   #endif
+   // For SSD1306 - This is Horizontal mode
+   // For SH1107 - This is page mode (Does not increment rows)
+   command(0x20);  // (p24) 3. Set Memory addressing mode
+   if (displayIC == DISPLAY_IC::SSD1306)
+   {
+      command(0x00);
+   }
 
-   command(0x81);	// (p28) 4. contrast control
-   command(0x2F);	// 0x2F, 0x4F, 0x8F - depending on source
-   
-   command(0xA0);	// (p29) 5. set segment remap (L->R | T->B)
+   command(0x81);  // (p28) 4. contrast control
+   command(0x2F);  // 0x2F, 0x4F, 0x8F - depending on source
 
-   command(0xA8);	// (p30) 6. multiplex ratio
-   command(_lcdHeight - 1); // duty = 1/64 = 0x3F
-   
-	command(0xA4);	// (p30) 7. set entire display off/on (0xA4/0xA5)
+   if (displayIC == DISPLAY_IC::SH1107)
+   {
+      command(0xA0);  // (p29) 5. set segment remap (L->R | T->B)
+   }
+   else
+   {
+      command(0xA1);  // (p29) 5. set segment remap (L->R | T->B)
+   }
 
-   command(0xA6);	// (p31) 8. 0xA6/0xA7 = normal (W on Bk) / inverted (Bk on W) display
-   
-   command(0xD3);	// (p32) 9. set display offset
-   #ifdef SFEOLED_SH1107
-   command(0x60); // 0x60 = 96?
-   #else
-   command(0x00); // 0x60 = 96?
-	#endif
+   command(0xA8);            // (p30) 6. multiplex ratio
+   command(_lcdHeight - 1);  // duty = 1/64 = 0x3F
 
-   command(0xB0);	// (p33) 12. set page address
-   
-   command(0xC0);	// (p34) 13. common output scan direction normal/vertically flipped (0xC0/0xC8)
-   
-   command(0xD5);	// (p35) 14. set clock divide ratio/OSC frequency
-   command(0x50); // fosc (POR) = 0x50 = 100Hz
+   command(0xA4);  // (p30) 7. set entire display off/on (0xA4/0xA5)
 
-   command(0xD9);	// (p36) 15. set discharge/pre-charge period
-   command(0x22); // 0x2* : pre-charge = 2 DCLKs, 0x*2 : discharge = 2 DCLKs
+   command(0xA6);  // (p31) 8. 0xA6/0xA7 = normal (W on Bk) / inverted (Bk on W) display
 
-   command(0xDB);	// (p37) 16. set VCOM deselect level
-   command(0x35); // //0x40 | 0x35; Vcomh = 0.43 + 0x35 * 0.006415 * Vref
+   command(0xD3);  // (p32) 9. set display offset
+   command(_yOffset);
 
-   command(0xDC);	// (p38) 17. set display start line
-   command(0x00);
-  
+   if (displayIC == DISPLAY_IC::SH1107)
+   {
+      command(0xB0);  // (p33) 12. set page address
+
+      command(
+          0xC0);  // (p34) 13. common output scan direction normal/vertically flipped (0xC0/0xC8)
+   }
+   else
+   {
+      command(
+          0xC8);  // (p34) 13. common output scan direction normal/vertically flipped (0xC0/0xC8)
+   }
+
+   command(0xDA);  // set com pins
+   command(_comPins);
+
+   command(0xD5);  // (p35) 14. set clock divide ratio/OSC frequency
+   command(0x50);  // fosc (POR) = 0x50 = 100Hz
+
+   if (vppSource == DISPLAY_VPP::External)
+   {
+      command(0xD9);  // (p36) 15. set discharge/pre-charge period
+      command(0x22);  // 0x2* : pre-charge = 2 DCLKs, 0x*2 : discharge = 2 DCLKs
+
+      if (displayIC == DISPLAY_IC::SSD1306)
+      {
+         command(0x8D);  // Disable charge pump
+         command(0x10);
+      }
+   }
+   else
+   {
+      command(0xD9);  // (p36) 15. set discharge/pre-charge period
+      command(0xF1);
+
+      command(0x8D);  // Enable charge pump
+      command(0x14);
+   }
+
+   command(0xDB);  // (p37) 16. set VCOM deselect level
+   command(0x40);  // //0x40 | 0x35; Vcomh = 0.43 + 0x35 * 0.006415 * Vref
+
+   if (displayIC == DISPLAY_IC::SH1107)
+   {
+      command(0xDC);  // (p38) 17. set display start line
+      command(0x00);
+   }
+   else
+   {
+      command(0x40);  // set display start line
+   }
+
    clear(SFEOLED_ALL);
 
-   command(0xAD);	// (p31) 10. DC-DC control mode
-   command(0x88);	// 0x8A //Set DC-DC enable 1.0SF, DC-DC disabled (external Vpp)
+   if (displayIC == DISPLAY_IC::SH1107)
+   {
+      command(0xAD);  // (p31) 10. DC-DC control mode
+      // command(0x88);  // 0x8A //Set DC-DC enable 1.0SF, DC-DC disabled (external Vpp)
+      command(0x8A);  // 0x8A //Set DC-DC enable 1.0SF, DC-DC disabled (external Vpp)
+   }
+   else
+   {
+      command(0x02);  // Deactivate horizontal scroll
+   }
+   command(0xAF);  // (p33) 11. display ON
 
-   command(0xAF);	// (p33) 11. display ON
    delay(100);
 }
 
@@ -576,9 +685,10 @@ void MicroOLED::begin()
 */
 void MicroOLED::command(uint8_t c)
 {
+   DebugPrintln(c,HEX);
    if (interface == COMM_MODE_SPI)
    {
-      spiTransfer(c, LOW);	// DC pin LOW for a command
+      spiTransfer(c, LOW);  // DC pin LOW for a command
    }
    else if (interface == COMM_MODE_I2C)
    {
@@ -604,7 +714,7 @@ void MicroOLED::data(uint8_t c)
 {
    if (interface == COMM_MODE_SPI)
    {
-      spiTransfer(c, HIGH);	// DC pin HIGH for a data byte
+      spiTransfer(c, HIGH);  // DC pin HIGH for a data byte
    }
    else if (interface == COMM_MODE_I2C)
    {
@@ -655,11 +765,7 @@ void MicroOLED::dataBlock(uint8_t *c, uint16_t startIdx, uint16_t len)
 
     Send page address command and address to the SSD1306 OLED controller.
 */
-void MicroOLED::setPageAddress(uint8_t add)
-{
-   add = 0xB0 | add;
-   command(add);
-}
+void MicroOLED::setPageAddress(uint8_t add) { command(0xB0 | add); }
 
 /** \brief Set SSD1306 column address.
 
@@ -668,8 +774,8 @@ void MicroOLED::setPageAddress(uint8_t add)
 void MicroOLED::setColumnAddress(uint8_t add)
 {
    // command((0x10|(add>>4))+0x02);
-   command((0x10 | (add >> 4)));	// send lower address byte
-   command((0x0F & add));	// send upper address byte
+   command((0x10 | (add >> 4)) + _xOffset);  // send lower address byte
+   command((0x0F & add));                    // send upper address byte
 }
 
 /** \brief Clear screen buffer or SSD1306's memory.
@@ -682,36 +788,38 @@ void MicroOLED::clear(uint8_t mode, uint8_t c)
    //	uint8_t page=6, col=0x40;
    if (mode == SFEOLED_ALL)
    {
-      if (_lcdWidth > 64)
+      /*
+      command(SFEOLED_COLUMNADDR);  // 0x21
+      command(0x00);                // start page Address
+      command(_lcdWidth - 1);       // end page Address
+
+      command(SFEOLED_PAGEADDR);      // 0x22
+      command(0x00);                  // start page Address
+      command((_lcdHeight / 8) - 1);  // end page Address
+      */
+      if (interface == COMM_MODE_I2C)
       {
-         command(SFEOLED_COLUMNADDR);
-         command(0x00);	// start page Address
-         command(_lcdWidth - 1);	// end page Address
+         uint16_t BLOCK_SIZE = 16;
 
-         command(SFEOLED_PAGEADDR);
-         command(0x00);	// start page Address
-         command((_lcdHeight / 8) - 1);	// end page Address
-
-         if (interface == COMM_MODE_I2C)
+         for (uint8_t row = 0; row < _lcdHeight / 8; row++)
          {
-            uint16_t BLOCK_SIZE = 16;
+            setPageAddress(row);
+            setColumnAddress(0);
 
-            for (uint16_t i = 0; i < _displayBufferSize; i += BLOCK_SIZE)
+            for (uint16_t col = row * _lcdWidth; col < (row + 1) * _lcdWidth; col += BLOCK_SIZE)
             {
                dataBlock(c, BLOCK_SIZE);
             }
-         }
-         else
-         {
-            dataBlock(c, _displayBufferSize);
+            yield();
          }
       }
       else
       {
-         for (uint16_t i = 0; i < _lcdHeight / 8; i++)
+         for (uint8_t row = 0; row < _lcdHeight / 8; row++)
          {
-            setPageAddress(i);
+            setPageAddress(row);
             setColumnAddress(0);
+
             dataBlock(c, _lcdWidth);
          }
       }
@@ -726,21 +834,21 @@ void MicroOLED::clear(uint8_t mode, uint8_t c)
 
     The WHITE color of the display will turn to BLACK and the BLACK will turn to WHITE.
 */
-void MicroOLED::invert(boolean inv)
+void MicroOLED::invert(bool inv)
 {
    if (inv)
-      command(SFEOLED_INVERTDISPLAY);	// 0xA7
+      command(SFEOLED_INVERTDISPLAY);  // 0xA7
    else
-      command(SFEOLED_NORMALDISPLAY);	// 0xA6
+      command(SFEOLED_NORMALDISPLAY);  // 0xA6
 }
 
 /** \brief Set contrast.
 
-    OLED contract value from 0 to 255. Note: Contrast level is not very obvious.
+    OLED contrast value from 0 to 255. Note: Contrast level is not very obvious.
 */
 void MicroOLED::contrast(uint8_t contrast)
 {
-   command(SFEOLED_SETCONTRAST);	// 0x81
+   command(SFEOLED_SETCONTRAST);  // 0x81
    command(contrast);
 }
 
@@ -750,58 +858,40 @@ void MicroOLED::contrast(uint8_t contrast)
    the screen buffer will be displayed on the OLED.
 */
 void MicroOLED::display(void)
-{
-   if (_lcdWidth > 64)
+{ 
+   /*
+      command(SFEOLED_COLUMNADDR);  // 0x21
+      command(0x00);                // start page Address
+      command(_lcdWidth - 1);       // end page Address
+
+      command(SFEOLED_PAGEADDR);      // 0x22
+      command(0x00);                  // start page Address
+      command((_lcdHeight / 8) - 1);  // end page Address
+   */
+   if (interface == COMM_MODE_I2C)
    {
-      command(SFEOLED_COLUMNADDR);
-      command(0x00);	// start column Address
-      command(_lcdWidth - 1);	// end column Address
+      const uint16_t BLOCK_SIZE = 16;
 
-      command(SFEOLED_PAGEADDR);
-      command(0x00);	// start page Address
-      command((_lcdHeight / 8) - 1);	// end page Address
-
-      if (interface == COMM_MODE_I2C)
+      for (uint8_t row = 0; row < _lcdHeight / 8; row++)
       {
-         const uint16_t BLOCK_SIZE = 16;
+         setPageAddress(row);
+         setColumnAddress(0);
 
-         for (uint16_t i = 0; i < _displayBufferSize; i += BLOCK_SIZE)
+         for (uint16_t col = row * _lcdWidth; col < (row + 1) * _lcdWidth; col += BLOCK_SIZE)
          {
-            dataBlock(screenmemory, i, BLOCK_SIZE);
+            dataBlock(screenmemory, col, BLOCK_SIZE);
          }
-      }
-      else
-      {
-         dataBlock(screenmemory, 0, _displayBufferSize);
+         yield();
       }
    }
    else
    {
-      if (interface == COMM_MODE_I2C)
+      for (uint8_t row = 0; row < _lcdHeight / 8; row++)
       {
-         for (uint8_t r = 0; r < _lcdHeight / 8; r++)
-         {
-            setPageAddress(r);
-            setColumnAddress(0);
+         setPageAddress(row);
+         setColumnAddress(0);
 
-            const uint16_t BLOCK_SIZE = 16;
-
-            for (uint16_t c = r * _lcdWidth; c < (r + 1) * _lcdWidth; c += BLOCK_SIZE)
-            {
-               dataBlock(screenmemory, c, BLOCK_SIZE);
-            }
-            yield();
-         }
-      }
-      else
-      {
-         for (uint8_t r = 0; r < _lcdHeight / 8; r++)
-         {
-            setPageAddress(r);
-            setColumnAddress(0);
-
-            dataBlock(screenmemory, r * _lcdWidth, _lcdWidth);
-         }
+         dataBlock(screenmemory, row * _lcdWidth, _lcdWidth);
       }
    }
 }
@@ -995,7 +1085,7 @@ void MicroOLED::rect(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint8_
    lineH(x, y, width, color, mode);
    lineH(x, y + height - 1, width, color, mode);
 
-   tempHeight = height - 2;	// skip drawing vertical lines to avoid overlapping of pixel that will
+   tempHeight = height - 2;  // skip drawing vertical lines to avoid overlapping of pixel that will
    // affect XOR plot if no pixel in between horizontal lines
    if (tempHeight < 1) return;
 
@@ -1103,7 +1193,7 @@ void MicroOLED::circleFill(uint8_t x0, uint8_t y0, uint8_t radius, uint8_t color
    int8_t ddF_x = 1;
    int8_t ddF_y = -2 * radius;
    int8_t x     = 0;
-   int8_t y     = radius;	// Temporary disable fill circle for XOR mode.
+   int8_t y     = radius;  // Temporary disable fill circle for XOR mode.
    if (mode == SFEOLED_XOR) return;
 
    for (uint8_t i = y0 - radius; i <= y0 + radius; i++)
@@ -1199,7 +1289,7 @@ uint8_t MicroOLED::setFontType(uint8_t type)
    fontStartChar = pgm_read_byte(fontsPointer[fontType] + 2);
    fontTotalChar = pgm_read_byte(fontsPointer[fontType] + 3);
    fontMapWidth  = (pgm_read_byte(fontsPointer[fontType] + 4) * 100) +
-                  pgm_read_byte(fontsPointer[fontType] + 5);	// two bytes values into integer 16
+                  pgm_read_byte(fontsPointer[fontType] + 5);  // two bytes values into integer 16
    return true;
 }
 
@@ -1242,10 +1332,13 @@ void MicroOLED::drawChar(uint8_t x, uint8_t y, uint8_t c, uint8_t color, uint8_t
        (c > (fontStartChar + fontTotalChar - 1)))  // no bitmap for the required c
       return;
 
-   tempC = c - fontStartChar;	// each row (in datasheet is call page) is 8 bits high, 16 bit high character will have 2 rows to
+   tempC = c - fontStartChar;  // each row (in datasheet is call page) is 8 bits high, 16 bit high
+                               // character will have 2 rows to
    // be drawn
-   rowsToDraw                      = fontHeight / 8;	// 8 is LCD's page size, see SSD1306 datasheet
-   if (rowsToDraw <= 1) rowsToDraw = 1;	// the following draw function can draw anywhere on the screen, but SLOW pixel by pixel draw
+   rowsToDraw = fontHeight / 8;  // 8 is LCD's page size, see SSD1306 datasheet
+   if (rowsToDraw <= 1)
+      rowsToDraw = 1;  // the following draw function can draw anywhere on the screen, but SLOW
+                       // pixel by pixel draw
    if (rowsToDraw == 1)
    {
       for (i = 0; i < fontWidth + 1; i++)
@@ -1276,11 +1369,13 @@ void MicroOLED::drawChar(uint8_t x, uint8_t y, uint8_t c, uint8_t color, uint8_t
 
    // font height over 8 bit
    // take character "0" ASCII 48 as example
-   charPerBitmapRow        = fontMapWidth / fontWidth;	// 256/8 =32 char per row
-   charColPositionOnBitmap = tempC % charPerBitmapRow;	// =16
-   charRowPositionOnBitmap = int(tempC / charPerBitmapRow);	// =1
-   charBitmapStartPosition = (charRowPositionOnBitmap * fontMapWidth * (fontHeight / 8)) +
-                             (charColPositionOnBitmap * fontWidth);	// each row on LCD is 8 bit height (see datasheet for explanation)
+   charPerBitmapRow        = fontMapWidth / fontWidth;       // 256/8 =32 char per row
+   charColPositionOnBitmap = tempC % charPerBitmapRow;       // =16
+   charRowPositionOnBitmap = int(tempC / charPerBitmapRow);  // =1
+   charBitmapStartPosition =
+       (charRowPositionOnBitmap * fontMapWidth * (fontHeight / 8)) +
+       (charColPositionOnBitmap *
+        fontWidth);  // each row on LCD is 8 bit height (see datasheet for explanation)
    for (row = 0; row < rowsToDraw; row++)
    {
       for (i = 0; i < fontWidth; i++)
@@ -1318,11 +1413,11 @@ void MicroOLED::scrollRight(uint8_t start, uint8_t stop)
 {
    if (stop < start)  // stop must be larger or equal to start
       return;
-   scrollStop();	// need to disable scrolling before starting to avoid memory corrupt
+   scrollStop();  // need to disable scrolling before starting to avoid memory corrupt
    command(SFEOLED_RIGHTHORIZONTALSCROLL);
    command(0x00);
    command(start);
-   command(0x7);	// scroll speed frames , TODO
+   command(0x7);  // scroll speed frames , TODO
    command(stop);
    command(0x00);
    command(0xFF);
@@ -1333,7 +1428,7 @@ void MicroOLED::scrollRight(uint8_t start, uint8_t stop)
 
 Flip the graphics on the OLED vertically.
 */
-void MicroOLED::flipVertical(boolean flip)
+void MicroOLED::flipVertical(bool flip)
 {
    if (flip)
    {
@@ -1349,7 +1444,7 @@ void MicroOLED::flipVertical(boolean flip)
 
     Flip the graphics on the OLED horizontally.
 */
-void MicroOLED::flipHorizontal(boolean flip)
+void MicroOLED::flipHorizontal(bool flip)
 {
    if (flip)
    {

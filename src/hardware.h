@@ -1,4 +1,4 @@
-/****************************************************************************** 
+/******************************************************************************
 hardware.cpp
 MicroOLED Arduino Library Hardware Interface
 
@@ -26,9 +26,9 @@ Arduino Pro 3.3V
 Micro OLED Breakout v1.0
 
 This code was heavily based around the MicroView library, written by GeekAmmo
-(https://github.com/geekammo/MicroView-Arduino-Library), and released under 
-the terms of the GNU General Public License as published by the Free Software 
-Foundation, either version 3 of the License, or (at your option) any later 
+(https://github.com/geekammo/MicroView-Arduino-Library), and released under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
 version.
 
 This program is distributed in the hope that it will be useful,
@@ -45,209 +45,224 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // Configure SPI settings - Max clk frequency for display is 10MHz
 SPISettings oledSettings(10000000, MSBFIRST, SPI_MODE0);
 
-void delay_100us() {uint32_t timer_t = micros(); while(micros() - timer_t < 100) { yield(); } }
+void delay_100us()
+{
+ 	uint32_t timer_t = micros();
+   while (micros() - timer_t < 100)
+   {
+      yield();
+   }
+}
 
 /** \brief Set Up SPI Interface
 
-	Sets up the SPI pins, initializes the Arduino's SPI interface.
+   Sets up the SPI pins, initializes the Arduino's SPI interface.
 **/
 void MicroOLED::spiSetup()
 {
-	// Initialize the pins:
-	pinMode(dcPin, OUTPUT);
-	pinMode(MOSI, OUTPUT);	// MOSI is an OUTPUT
-	pinMode(SCK, OUTPUT);	// SCK is an OUTPUT
-	pinMode(csPin, OUTPUT);	// CS is an OUTPUT
-	digitalWrite(csPin, HIGH);	// Start CS High
-	
-	SPI.begin();
-	#ifdef SPI_HAS_TRANSACTION
-		SPI.beginTransaction(oledSettings);
-    #else
-		SPI.setClockDivider(2);
-	#endif
+   // Initialize the pins:
+   pinMode(dcPin, OUTPUT);
+   pinMode(MOSI, OUTPUT);      // MOSI is an OUTPUT
+   pinMode(SCK, OUTPUT);       // SCK is an OUTPUT
+   pinMode(csPin, OUTPUT);     // CS is an OUTPUT
+   digitalWrite(csPin, HIGH);  // Start CS High
+
+   SPI.begin();
+#ifdef SPI_HAS_TRANSACTION
+   SPI.beginTransaction(oledSettings);
+#else
+   SPI.setClockDivider(2);
+#endif
 }
 
 /** \brief Transfer a uint8_t over SPI
 
-	Use the SPI library to transfer a uint8_t. Only used for data OUTPUT.
-	This function does not toggle the CS pin. Do that before and after!
+   Use the SPI library to transfer a uint8_t. Only used for data OUTPUT.
+   This function does not toggle the CS pin. Do that before and after!
 **/
 void MicroOLED::spiTransfer(uint8_t data, uint8_t dc)
 {
-	//digitalWrite(csPin, HIGH);
-	digitalWrite(dcPin, dc);
-	digitalWrite(csPin, LOW);
-	//SPI.beginTransaction(oledSettings);
-	SPI.transfer(data);	
-	//SPI.endTransaction();
-	digitalWrite(csPin, HIGH);
+   // digitalWrite(csPin, HIGH);
+   digitalWrite(dcPin, dc);
+   digitalWrite(csPin, LOW);
+   // SPI.beginTransaction(oledSettings);
+   SPI.transfer(data);
+   // SPI.endTransaction();
+   digitalWrite(csPin, HIGH);
 }
 
-void MicroOLED::spiBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len)
+void MicroOLED::spiBlockTransfer(uint8_t* data, uint16_t startIdx, uint16_t len)
 {
-	//digitalWrite(csPin, HIGH);
-	digitalWrite(dcPin, HIGH);	// DC HIGH for data
-	digitalWrite(csPin, LOW);
-	//SPI.beginTransaction(oledSettings);
-	for (uint16_t i = startIdx; i < startIdx+len; ++i) { SPI.transfer(data[i]);}
-	//SPI.endTransaction();
-	digitalWrite(csPin, HIGH);
+   // digitalWrite(csPin, HIGH);
+   digitalWrite(dcPin, HIGH);  // DC HIGH for data
+   digitalWrite(csPin, LOW);
+   // SPI.beginTransaction(oledSettings);
+   for (uint16_t i = startIdx; i < startIdx + len; ++i)
+   {
+      SPI.transfer(data[i]);
+   }
+   // SPI.endTransaction();
+   digitalWrite(csPin, HIGH);
 }
 
 void MicroOLED::spiBlockTransfer(uint8_t data, uint16_t len)
 {
-	//digitalWrite(csPin, HIGH);
-	digitalWrite(dcPin, HIGH);	// DC HIGH for data
-	digitalWrite(csPin, LOW);
-	//SPI.beginTransaction(oledSettings);
-	for (uint16_t i = 0; i < len; ++i) { SPI.transfer(data);}
-	//SPI.endTransaction();
-	digitalWrite(csPin, HIGH);
+   // digitalWrite(csPin, HIGH);
+   digitalWrite(dcPin, HIGH);  // DC HIGH for data
+   digitalWrite(csPin, LOW);
+   // SPI.beginTransaction(oledSettings);
+   for (uint16_t i = 0; i < len; ++i)
+   {
+      SPI.transfer(data);
+   }
+   // SPI.endTransaction();
+   digitalWrite(csPin, HIGH);
 }
 
 void MicroOLED::i2cScan()
 {
-	for(uint8_t address=1; address<128; ++address)
-	{
-	  SFE_MicroOLED_Wire.beginTransmission(address);
-	  SFE_MicroOLED_Wire.write((uint8_t)0); // register 0
-	  SFE_MicroOLED_Wire.endTransmission();
-	  uint8_t device_found = (SFE_MicroOLED_Wire.requestFrom(address, 1) == 1); // read 1 byte of data
-	  SFE_MicroOLED_Wire.endTransmission();
+   for (uint8_t address = 1; address < 128; ++address)
+   {
+      SFE_MicroOLED_Wire.beginTransmission(address);
+      SFE_MicroOLED_Wire.write((uint8_t)0);  // register 0
+      SFE_MicroOLED_Wire.endTransmission();
+      uint8_t device_found =
+          (SFE_MicroOLED_Wire.requestFrom(address, 1) == 1);  // read 1 byte of data
+      SFE_MicroOLED_Wire.endTransmission();
 
-	  if(device_found)
-	  {
-	      if ((address == I2C_ADDRESS_SA0_0) || (address == I2C_ADDRESS_SA0_1))
-	      {
-	      	_i2c_address = address;
-	      	return;
-	      }
-	  }
-	}
-	
-	// this should not be needed, but the address defaults to 0x3C if it wasnt found in the scan
-	_i2c_address = I2C_ADDRESS_SA0_0; 
+      if (device_found)
+      {
+         if ((address == I2C_ADDRESS_SA0_0) || (address == I2C_ADDRESS_SA0_1))
+         {
+            _i2c_address = address;
+            return;
+         }
+      }
+   }
+
+   // this should not be needed, but the address defaults to 0x3C if it wasnt found in the scan
+   _i2c_address = I2C_ADDRESS_SA0_0;
 }
 /** \brief Initialize the I2C Interface
 
-	This function initializes the I2C peripheral. It also sets up the
-	I2C clock frequency.
+   This function initializes the I2C peripheral. It also sets up the
+   I2C clock frequency.
 **/
 void MicroOLED::i2cSetup()
 {
-	// Initialize Wire library (I2C)
-	SFE_MicroOLED_Wire.begin();
+   // Initialize Wire library (I2C)
+   SFE_MicroOLED_Wire.setClock(400000);
+   SFE_MicroOLED_Wire.begin();
 }
 
 /** \brief  Write a uint8_t over I2C
 
-	Write a uint8_t to I2C device _address_. The DC uint8_t determines whether
-	the data being sent is a command or display data. Use either I2C_COMMAND
-	or I2C_DATA in that parameter. The data uint8_t can be any 8-bit value.
+   Write a uint8_t to I2C device _address_. The DC uint8_t determines whether
+   the data being sent is a command or display data. Use either I2C_COMMAND
+   or I2C_DATA in that parameter. The data uint8_t can be any 8-bit value.
 **/
 void MicroOLED::i2cTransfer(uint8_t data, uint8_t control)
 {
-	SFE_MicroOLED_Wire.beginTransmission(_i2c_address);
-	SFE_MicroOLED_Wire.write(control); // If data dc = 0, if command dc = 0x40
-	delay_100us();
-	SFE_MicroOLED_Wire.write(data);
-	delay_100us();
-	SFE_MicroOLED_Wire.endTransmission();
+   SFE_MicroOLED_Wire.beginTransmission(_i2c_address);
+   SFE_MicroOLED_Wire.write(control);  // If data dc = 0, if command dc = 0x40
+   //delay_100us();
+   SFE_MicroOLED_Wire.write(data);
+   //delay_100us();
+   SFE_MicroOLED_Wire.endTransmission();
 }
 void MicroOLED::i2cBlockTransfer(uint8_t data, uint16_t len)
 {
-	SFE_MicroOLED_Wire.beginTransmission(_i2c_address);
-	SFE_MicroOLED_Wire.write(I2C_DATA);
-	delay_100us();
-	for (uint16_t i=0; i<len; ++i)
-	{
-		SFE_MicroOLED_Wire.write(data);
-		delay_100us();
-	}
-	SFE_MicroOLED_Wire.endTransmission();
+   SFE_MicroOLED_Wire.beginTransmission(_i2c_address);
+   SFE_MicroOLED_Wire.write(I2C_DATA);
+   //delay_100us();
+   for (uint16_t i = 0; i < len; ++i)
+   {
+      SFE_MicroOLED_Wire.write(data);
+      //delay_100us();
+   }
+   SFE_MicroOLED_Wire.endTransmission();
 }
-void MicroOLED::i2cBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len)
+void MicroOLED::i2cBlockTransfer(uint8_t* data, uint16_t startIdx, uint16_t len)
 {
-	SFE_MicroOLED_Wire.beginTransmission(_i2c_address);
-	SFE_MicroOLED_Wire.write(I2C_DATA);
-	delay_100us();
-	for (uint16_t i=startIdx; i<startIdx+len; ++i)
-	{
-		SFE_MicroOLED_Wire.write(data[i]);
-		delay_100us();
-	}
-	SFE_MicroOLED_Wire.endTransmission();
+   SFE_MicroOLED_Wire.beginTransmission(_i2c_address);
+   SFE_MicroOLED_Wire.write(I2C_DATA);
+   //delay_100us();
+   for (uint16_t i = startIdx; i < startIdx + len; ++i)
+   {
+      SFE_MicroOLED_Wire.write(data[i]);
+      //delay_100us();
+   }
+   SFE_MicroOLED_Wire.endTransmission();
 }
 /** \brief Set up Parallel Interface
 
-	This function initializes all of the pins used in the
-	parallel interface.
+   This function initializes all of the pins used in the
+   parallel interface.
 **/
 void MicroOLED::parallelSetup()
 {
-	// Initialize WR, RD, CS and data pins as outputs.
-	pinMode(dcPin, OUTPUT);
-	pinMode(wrPin, OUTPUT);
-	pinMode(rdPin, OUTPUT);
-	pinMode(csPin, OUTPUT);
-	digitalWrite(dcPin, HIGH); // either HIGH or LOW
-	digitalWrite(wrPin, HIGH);
-	digitalWrite(rdPin, HIGH);
-	digitalWrite(csPin, HIGH);
-	for (uint16_t i=0; i<8; i++)
-	{
-		pinMode(dPins[i], OUTPUT);
-	}
+   // Initialize WR, RD, CS and data pins as outputs.
+   pinMode(dcPin, OUTPUT);
+   pinMode(wrPin, OUTPUT);
+   pinMode(rdPin, OUTPUT);
+   pinMode(csPin, OUTPUT);
+   digitalWrite(dcPin, HIGH);  // either HIGH or LOW
+   digitalWrite(wrPin, HIGH);
+   digitalWrite(rdPin, HIGH);
+   digitalWrite(csPin, HIGH);
+   for (uint16_t i = 0; i < 8; i++)
+   {
+      pinMode(dPins[i], OUTPUT);
+   }
 }
 
 /** \brief Write a uint8_t over the parallel interface
 
-	This function will both set the DC pin, depending on whether a data or
-	command uint8_t is being sent, and it will toggle the WR, RD and data pins
-	to send a uint8_t.
+   This function will both set the DC pin, depending on whether a data or
+   command uint8_t is being sent, and it will toggle the WR, RD and data pins
+   to send a uint8_t.
 **/
 void MicroOLED::parallelTransfer(uint8_t data, uint8_t dc)
 {
-	// Initial state: cs high, wr high, rd high
+   // Initial state: cs high, wr high, rd high
 
-	// chip select high->low
-	digitalWrite(csPin, LOW);
-	
-	// dc high or low
-	digitalWrite(dcPin, dc);
-	
-	// wr high->low
-	digitalWrite(wrPin, LOW);
-	
-	// set data pins
-	for (uint16_t i=0; i<8; i++)
-	{
-		if (data & (1<<i))
-			digitalWrite(dPins[i], HIGH);
-		else
-			digitalWrite(dPins[i], LOW);
-	}
-	
-	// wr low->high
-	digitalWrite(wrPin, HIGH);
-		
-	// cs high
-	digitalWrite(csPin, HIGH);
+   // chip select high->low
+   digitalWrite(csPin, LOW);
+
+   // dc high or low
+   digitalWrite(dcPin, dc);
+
+   // wr high->low
+   digitalWrite(wrPin, LOW);
+
+   // set data pins
+   for (uint16_t i = 0; i < 8; i++)
+   {
+      if (data & (1 << i))
+         digitalWrite(dPins[i], HIGH);
+      else
+         digitalWrite(dPins[i], LOW);
+   }
+
+   // wr low->high
+   digitalWrite(wrPin, HIGH);
+
+   // cs high
+   digitalWrite(csPin, HIGH);
 }
 
 void MicroOLED::parallelBlockTransfer(uint8_t data, uint16_t len)
 {
-	for (uint16_t i=0; i<len; i++)
-	{
-		parallelTransfer(data, HIGH); // data = HIGH
-	}
+   for (uint16_t i = 0; i < len; i++)
+   {
+      parallelTransfer(data, HIGH);  // data = HIGH
+   }
 }
 
-void MicroOLED::parallelBlockTransfer(uint8_t * data, uint16_t startIdx, uint16_t len)
+void MicroOLED::parallelBlockTransfer(uint8_t* data, uint16_t startIdx, uint16_t len)
 {
-	for (uint16_t i=0; i<len; i++)
-	{
-		parallelTransfer(data[i], HIGH); // data = HIGH
-	}
+   for (uint16_t i = 0; i < len; i++)
+   {
+      parallelTransfer(data[i], HIGH);  // data = HIGH
+   }
 }
