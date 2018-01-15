@@ -76,9 +76,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 //#define DEBUG_SFE_MicroOLED
 #ifdef DEBUG_SFE_MicroOLED
+#define DebugPrint(...) Serial.print(__VA_ARGS__)
 #define DebugPrintln(...) Serial.println(__VA_ARGS__)
 #else
-#define DebugPrintln(...)
+#define DebugPrint(...) 
+#define DebugPrintln(...) 
 #endif
 
 // The 31x48 font is handy, but uses a big chunk of flash memory - about 7k.
@@ -530,24 +532,25 @@ void MicroOLED::begin(uint8_t vppSource, uint8_t displayIC)
    }
    else if (_lcdHeight < 64)
    {
-      setupDisplay(0x02, 0x00, 0x02);
+      setupDisplay(0x00, 0x00, 0x02);//setupDisplay(0x02, 0x00, 0x02);
    }
    else
    {
       setupDisplay(0x00, 0x00);
    }
 
-   Serial.print(F("(x,y,comPins,VPP,IC)="));
-   Serial.print(_xOffset, HEX);
-   Serial.print(F(","));
-   Serial.print(_yOffset, HEX);
-   Serial.print(F(","));
-   Serial.print(_comPins, HEX);
-   Serial.print(F(","));
-   Serial.print(vppSource == DISPLAY_VPP::Internal ? "Internal" : "External");
-   Serial.print(F(","));
-   Serial.print(displayIC == DISPLAY_IC::SSD1306 ? "SSD1306" : "SH1107");
-   Serial.println(F(""));
+
+   DebugPrint(F("(x,y,comPins,VPP,IC)="));
+   DebugPrint(_xOffset, HEX);
+   DebugPrint(F(","));
+   DebugPrint(_yOffset, HEX);
+   DebugPrint(F(","));
+   DebugPrint(_comPins, HEX);
+   DebugPrint(F(","));
+   DebugPrint(vppSource == DISPLAY_VPP::Internal ? "Internal" : "External");
+   DebugPrint(F(","));
+   DebugPrint(displayIC == DISPLAY_IC::SSD1306 ? "SSD1306" : "SH1107");
+   DebugPrintln(F(""));
 
    // default 5x7 font
    setFontType(0);
