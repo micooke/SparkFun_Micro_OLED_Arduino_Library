@@ -17,28 +17,50 @@
  * 
  * Distributed as-is; no warranty is given.
  ***************************************************************/
-#include <Wire.h>  // Include Wire if you're using I2C
-#include <SPI.h>  // Include SPI if you're using SPI
-#include <SFE_MicroOLED.h>  // Include the SFE_MicroOLED library
-
-//////////////////////////
-// MicroOLED Definition //
-//////////////////////////
-#define PIN_RESET 9  // Connect RST to pin 9 (SPI & I2C)
-#define PIN_DC    8  // Connect DC to pin 8 (SPI only)
-#define PIN_CS    10 // Connect CS to pin 10 (SPI only)
-#define DC_JUMPER 0  // DC jumper setting(I2C only)
 
 //////////////////////////////////
 // MicroOLED Object Declaration //
 //////////////////////////////////
-MicroOLED oled(PIN_RESET, PIN_DC, PIN_CS);  // SPI Example
+#include <Arduino.h>
+#include <Wire.h>
+#include <SPI.h>
+
+//#define SFE_MicroOLED_SoftwareI2C
+//#define SH1107_EXTERNAL_CONTROL
+#if defined(_VARIANT_T28_) | defined(SH1107_EXTERNAL_CONTROL)
+  #define SFEOLED_SH1107
+#endif
+#include <SFE_MicroOLED.h>  // Include the SFE_MicroOLED library
+
+//MicroOLED oled(PIN_RESET, PIN_DC, PIN_CS);  // SPI Example
 //MicroOLED oled(PIN_RESET, DC_JUMPER);  // I2C Example
+#if defined(SH1107_EXTERNAL_CONTROL)
+  #define OLED_WIDTH 64
+  #define OLED_HEIGHT 128
+  MicroOLED oled(8, 9, 10);
+#elif defined(_VARIANT_T28_)
+  #define OLED_WIDTH 64
+  #define OLED_HEIGHT 128
+  MicroOLED oled(OLED_RST, OLED_DC, OLED_CS);
+#elif defined (_VARIANT_IDO003_) | defined (_VARIANT_ID100HR_) | defined(_VARIANT_ID107HR_)
+  #define OLED_WIDTH 64
+  #define OLED_HEIGHT 32
+  MicroOLED oled(OLED_RST, OLED_DC, OLED_CS);
+#else
+  #define OLED_WIDTH 128
+  #define OLED_HEIGHT 64
+  
+  #ifdef SFE_MicroOLED_SoftwareI2C
+  MicroOLED oled(7,8); // SoftwareI2C Example - sda,scl = 7,8
+  #else
+  MicroOLED oled; // I2C Example (No RST pin, i2c address  = 0x3C)
+  #endif
+#endif
 
 // Use these variables to set the initial time
-int hours = 11;
-int minutes = 50;
-int seconds = 30;
+int hours = (__TIME__[0] -'0') *10 +( __TIME__[1] -'0');
+int minutes = (__TIME__[3] -'0') *10 +( __TIME__[4] -'0');
+int seconds = (__TIME__[7] -'0') *10 +( __TIME__[7] -'0');
 
 // How fast do you want the clock to spin? Set this to 1 for fun.
 // Set this to 1000 to get _about_ 1 second timing.
@@ -80,7 +102,7 @@ void initClockVariables()
 
 void setup()
 {
-  oled.setScreenSize(64,32); // Default values
+  oled.setScreenSize(OLED_WIDTH, OLED_HEIGHT);
   MIDDLE_X = oled.getLCDWidth() / 2;
   MIDDLE_Y = oled.getLCDHeight() / 2;
   oled.begin();     // Initialize the OLED
