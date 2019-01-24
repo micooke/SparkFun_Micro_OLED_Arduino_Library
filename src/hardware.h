@@ -121,22 +121,15 @@ void MicroOLED::spiBlockTransfer(uint8_t data, uint16_t len)
 
 void MicroOLED::i2cScan()
 {
-   for (uint8_t address = 1; address < 128; ++address)
+   for (uint8_t address = I2C_ADDRESS_SA0_0; address <= I2C_ADDRESS_SA0_1; ++address)
    {
       SFE_MicroOLED_Wire.beginTransmission(address);
-      SFE_MicroOLED_Wire.write((uint8_t)0);  // register 0
-      SFE_MicroOLED_Wire.endTransmission();
-      uint8_t device_found =
-          (SFE_MicroOLED_Wire.requestFrom(address, 1) == 1);  // read 1 byte of data
-      SFE_MicroOLED_Wire.endTransmission();
+      bool device_found = (SFE_MicroOLED_Wire.endTransmission() == 0);
 
       if (device_found)
       {
-         if ((address == I2C_ADDRESS_SA0_0) || (address == I2C_ADDRESS_SA0_1))
-         {
-            _i2c_address = address;
-            return;
-         }
+         _i2c_address = address;
+         return;
       }
    }
 
