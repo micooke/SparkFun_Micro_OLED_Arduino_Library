@@ -20,11 +20,6 @@ https://github.com/micooke/sparkfun_OLED
 This file defines the hardware interface(s) for the Micro OLED Breakout. Those
 interfaces include SPI, I2C and a parallel bus.
 
-Development environment specifics:
-Arduino 1.0.5
-Arduino Pro 3.3V
-Micro OLED Breakout v1.0
-
 This code was heavily based around the MicroView library, written by GeekAmmo
 (https://github.com/geekammo/MicroView-Arduino-Library), and released under
 the terms of the GNU General Public License as published by the Free Software
